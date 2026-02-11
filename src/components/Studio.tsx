@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { audioEngine } from '@/lib/audioEngine';
 import VoiceRecorder from './VoiceRecorder';
-import BackgroundViz from './BackgroundViz';
+// import BackgroundViz from './BackgroundViz'; // Temporarily disabled for deployment
 import TrackLane from './TrackLane';
 import {
     Play, Square, Music2, Layers, Sparkles, HelpCircle, Save,
@@ -167,7 +167,7 @@ export default function Studio() {
 
     return (
         <div className="studio-container">
-            <BackgroundViz />
+            {/* <BackgroundViz /> */}
 
             {/* Header / Nav */}
             <header className="top-nav">
