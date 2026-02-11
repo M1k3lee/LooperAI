@@ -366,6 +366,56 @@ class AudioEngine {
                 break;
         }
     }
+    // --- AUDIO ANALYSIS & CLASSIFICATION ---
+
+    async detectAudioType(blob: Blob): Promise<'kick' | 'bass' | 'hat' | 'lead'> {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await Tone.getContext().decodeAudioData(arrayBuffer);
+        const data = audioBuffer.getChannelData(0);
+
+        // 1. Calculate Zero-Crossing Rate (ZCR) - Measures "noisiness"
+        let zeroCrossings = 0;
+        for (let i = 1; i < data.length; i++) {
+            if ((data[i] >= 0 && data[i - 1] < 0) || (data[i] < 0 && data[i - 1] >= 0)) {
+                zeroCrossings++;
+            }
+        }
+        const zcr = zeroCrossings / data.length;
+
+        // 2. Calculate Spectral Centroid (ignoring FFT complexity, use simpler time-domain proxy)
+        // We generally treat ZCR as a proxy for frequency content in simple monophonic signals
+        // Low ZCR = Low Frequency (Kick/Bass)
+        // High ZCR = High Frequency (Hat/Snare)
+
+        // 3. RMS / Energy Profile
+        let energy = 0;
+        for (let i = 0; i < data.length; i++) {
+            energy += data[i] * data[i];
+        }
+        const rms = Math.sqrt(energy / data.length);
+
+        console.log(`[PulseForge] Analysis: ZCR=${zcr.toFixed(3)} | RMS=${rms.toFixed(3)} | Duration=${audioBuffer.duration.toFixed(2)}s`);
+
+        // CLASSIFICATION LOGIC
+        // Hi-Hats / Snares: Noisy, high frequency (High ZCR), usually short
+        if (zcr > 0.1) {
+            return 'hat'; // "Ts", "Ch", "Ka" sounds
+        }
+
+        // Kicks vs Bass: Both low freq (Low ZCR). Kick is short/punchy. Bass is sustained.
+        // Kicks usually have very low ZCR (fundamental < 100Hz)
+        if (zcr < 0.02) {
+            // Very low frequency
+            if (audioBuffer.duration < 0.6) {
+                return 'kick'; // Short "Boom" or "Puh"
+            } else {
+                return 'bass'; // Long "Dummmmm"
+            }
+        }
+
+        // Mid-range: Leads or Vocals
+        return 'lead'; // "Laa", "Dee", hums
+    }
 }
 
 export const audioEngine = typeof window !== 'undefined' ? new AudioEngine() : null;

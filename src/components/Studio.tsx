@@ -76,7 +76,12 @@ export default function Studio() {
             if (suggestedType === 'lead') defaultPrompt = "Catchy synth lead melody";
         }
 
-        const currentPrompt = localPrompt || defaultPrompt || (audioBlob ? "Professional EDM melody from voice" : "");
+        const currentPrompt = localPrompt || defaultPrompt || (audioBlob ?
+            (suggestedType === 'kick' ? "Punchy Kick Drum from beatbox" :
+                suggestedType === 'hat' ? "Hi-hats and shakers from beatbox" :
+                    suggestedType === 'bass' ? "Deep sub bass from vocal hum" :
+                        "Professional EDM melody from voice") : "");
+
         if (!currentPrompt && !audioBlob) return;
 
         setGenerating(true);
@@ -84,7 +89,7 @@ export default function Studio() {
 
         let type = suggestedType;
         const pl = currentPrompt.toLowerCase();
-        if (pl.includes('drum') || pl.includes('kick')) type = 'drums';
+        if (pl.includes('drum') || pl.includes('kick') || suggestedType === 'kick' || suggestedType === 'hat') type = 'drums';
         if (pl.includes('bass')) type = 'bass';
         if (pl.includes('lead') || pl.includes('synth')) type = 'lead';
 
@@ -299,7 +304,10 @@ export default function Studio() {
                                             <Mic size={16} className="text-purple-400" />
                                             <h3 className="text-[11px] font-black text-white/40 uppercase tracking-widest">Voice Forge</h3>
                                         </div>
-                                        <VoiceRecorder onUpload={(blob) => handleGenerate('lead', blob)} />
+                                        <VoiceRecorder onUpload={async (blob) => {
+                                            const type = audioEngine ? await audioEngine.detectAudioType(blob) : 'lead';
+                                            handleGenerate(type, blob);
+                                        }} />
                                     </div>
                                 </motion.div>
                             ) : (
