@@ -13,6 +13,7 @@ class AudioEngine {
         delay: Tone.FeedbackDelay,
         volume: Tone.Volume
     }> = new Map();
+    private playerMetadata: Map<string, { originalBpm: number, url: string }> = new Map();
     private masterBus?: Tone.Gain;
     private analyzer?: Tone.Analyser;
     private isStarted: boolean = false;
@@ -58,7 +59,16 @@ class AudioEngine {
     }
 
     setBpm(bpm: number) {
-        Tone.Transport.bpm.value = bpm;
+        Tone.Transport.bpm.rampTo(bpm, 0.1);
+
+        // Update all active players playback rate
+        this.players.forEach((player, id) => {
+            const meta = this.playerMetadata.get(id);
+            if (meta) {
+                const ratio = bpm / meta.originalBpm;
+                player.playbackRate = ratio;
+            }
+        });
     }
 
     private getOrCreateTrackChain(id: string) {
@@ -108,52 +118,34 @@ class AudioEngine {
 
         const chain = this.getOrCreateTrackChain(id);
 
-        // Create player
         const player = new Tone.Player({
             url: url,
             loop: true,
             autostart: false,
             onload: () => {
-                // Determine length in bars (assuming 4/4)
-                // AI clips are often exactly 5, 10, or 30 seconds. 
-                // We'll try to guess if it's 2, 4, or 8 bars.
-                let detectedBpm = originalBpm;
+                let finalOriginalBpm = originalBpm;
                 const duration = player.buffer.duration;
 
-                // If it's an AI clip (usually very long), we might need to "fit" it
                 if (url.startsWith('data:audio') || url.includes('/generate')) {
-                    // Force fit: Assume the user hummed a 2 or 4 bar loop
-                    // Calculate what BPM would make this duration X bars
+                    const beatsAt120 = duration * 2; // Rough estimate
                     const beats = duration * (Tone.Transport.bpm.value / 60);
-                    // Round to nearest power of 2 bars (8, 16 beats)
                     const targetBeats = beats > 12 ? 16 : 8;
-                    detectedBpm = (targetBeats / duration) * 60;
+                    finalOriginalBpm = (targetBeats / duration) * 60;
                 }
 
-                const ratio = Tone.Transport.bpm.value / detectedBpm;
+                this.playerMetadata.set(id, { originalBpm: finalOriginalBpm, url });
+                const ratio = Tone.Transport.bpm.value / finalOriginalBpm;
                 player.playbackRate = ratio;
-                player.sync().start(0);
 
-                console.log(`[PulseForge] Synced: ${id} | Duration: ${duration.toFixed(2)}s | Target BPM: ${detectedBpm.toFixed(1)}`);
+                // QUANTIZATION: Start on next bar if playing
+                const startTime = Tone.Transport.state === 'started'
+                    ? Tone.Transport.nextSubdivision("1m")
+                    : 0;
+
+                player.sync().start(startTime);
+                console.log(`[PulseForge] Synced: ${id} | Start: ${startTime} | Original BPM: ${finalOriginalBpm.toFixed(1)}`);
             }
         });
-
-        const bpmListener = () => {
-            const duration = player.buffer.duration;
-            if (!duration) return;
-
-            let detectedBpm = originalBpm;
-            if (url.startsWith('data:audio') || url.includes('/generate')) {
-                const beats = duration * (Tone.Transport.bpm.value / 60);
-                const targetBeats = beats > 12 ? 16 : 8;
-                detectedBpm = (targetBeats / duration) * 60;
-            }
-
-            const ratio = Tone.Transport.bpm.value / detectedBpm;
-            player.playbackRate = ratio;
-        };
-
-        Tone.Transport.on('start', bpmListener);
 
         player.connect(chain.input);
         this.players.set(id, player);
