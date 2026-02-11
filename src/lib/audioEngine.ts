@@ -31,8 +31,8 @@ class AudioEngine {
         }
     }
 
-    getFFT() {
-        return this.analyzer ? this.analyzer.getValue() : new Float32Array(1024);
+    getFFT(): Float32Array {
+        return (this.analyzer ? this.analyzer.getValue() : new Float32Array(1024)) as Float32Array;
     }
 
     async startTransport() {

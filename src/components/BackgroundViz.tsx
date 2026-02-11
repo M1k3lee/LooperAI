@@ -50,14 +50,14 @@ export default function BackgroundViz() {
             // Draw reactive spectrum lines at the bottom
             const barWidth = canvas.width / 64;
             for (let i = 0; i < 64; i++) {
-                const val = (fft[i] as any as number) * 300;
+                const val = (fft[i] || 0) * 300;
                 const hue = 280 + (i * 2);
                 ctx.fillStyle = `hsla(${hue}, 70%, 60%, 0.2)`;
                 ctx.fillRect(i * barWidth * 1.5, canvas.height, barWidth, -val - (energy * 100));
             }
 
             particles.forEach((p, i) => {
-                const valAtI = fft[i % 32] as any as number;
+                const valAtI = fft[i % 32] || 0;
                 const audioScale = 1 + (Math.abs(valAtI) * 5);
                 ctx.fillStyle = p.color;
                 ctx.beginPath();
