@@ -111,16 +111,21 @@ export default function Studio() {
             }
 
             let response;
-            if (audioBlob) {
-                const formData = new FormData();
-                formData.append('prompt', finalPrompt);
-                formData.append('type', type);
-                formData.append('audio', audioBlob);
-                response = await axios.post('/api/generate', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-            } else {
-                response = await axios.post('/api/generate', { prompt: finalPrompt, type: type });
+            try {
+                if (audioBlob) {
+                    const formData = new FormData();
+                    formData.append('prompt', finalPrompt);
+                    formData.append('type', type);
+                    formData.append('audio', audioBlob);
+                    response = await axios.post('/api/generate', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                } else {
+                    response = await axios.post('/api/generate', { prompt: finalPrompt, type: type });
+                }
+            } catch (e) {
+                console.warn("[PulseForge] Cloud generation failed, using local fallback...", e);
+                response = { data: { useLocalFallback: true } };
             }
 
             const trackId = Math.random().toString(36).substr(2, 9);
@@ -141,9 +146,43 @@ export default function Studio() {
                     Object.entries(params).forEach(([fx, val]) => engine.updateEffect(trackId, fx, (val as number)));
                     await engine.playTrack(trackId, response.data.audio);
                 }
+            } else if (response.data.useLocalFallback) {
+                // FALLBACK: Local Synthesis
+                const isKick = type === 'drums';
+                const isBass = type === 'bass';
+
+                // Simple pattern generation based on randomness
+                const pattern = Array(16).fill(false).map((_, i) =>
+                    isKick ? i % 4 === 0 : // 4-on-the-floor
+                        isBass ? (i % 2 === 0 && Math.random() > 0.3) : // Off-beat bass
+                            Math.random() > 0.6 // Random melody
+                );
+
+                addTrack({
+                    id: trackId,
+                    name: `LOCAL ${isKick ? 'KICK' : isBass ? 'BASS' : 'SYNTH'}`,
+                    type: type as any,
+                    url: '', // Local synth doesn't need URL immediately
+                    color: isKick ? '#a855f7' : isBass ? '#ec4899' : '#3b82f6',
+                    isActive: true,
+                    bpm: bpm,
+                    pattern: pattern
+                });
+
+                if (engine) {
+                    if (isKick) engine.createLocalDrumLoop(trackId, "Kick", pattern, finalPrompt);
+                    else if (isBass) engine.createLocalBassline(trackId, pattern, finalPrompt);
+                    else engine.createLocalLead(trackId, pattern, finalPrompt);
+
+                    if (!isPlaying) {
+                        await engine.startTransport();
+                        togglePlay();
+                    }
+                }
             }
             setLocalPrompt('');
         } catch (err: any) {
+            console.error(err);
             setError('Forging failed. Try a different prompt.');
         } finally {
             setGenerating(false);
