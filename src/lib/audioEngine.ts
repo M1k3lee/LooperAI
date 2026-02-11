@@ -9,12 +9,14 @@ class AudioEngine {
         filter: Tone.Filter,
         dist: Tone.Distortion,
         sidechain: Tone.Gain,
-        reverb: Tone.Reverb,
-        delay: Tone.FeedbackDelay,
+        sendReverb: Tone.Gain,
+        sendDelay: Tone.Gain,
         volume: Tone.Volume
     }> = new Map();
     private playerMetadata: Map<string, { originalBpm: number, url: string }> = new Map();
     private masterBus?: Tone.Gain;
+    private globalReverb?: Tone.Reverb;
+    private globalDelay?: Tone.FeedbackDelay;
     private analyzer?: Tone.Analyser;
     private isStarted: boolean = false;
     private duckingAmount: number = 0.5;
@@ -22,17 +24,22 @@ class AudioEngine {
     constructor() {
         if (typeof window !== 'undefined') {
             console.log("[PulseForge] Audio Core Initializing...");
-            // Higher lookahead for mobile CPU stability
+            // Optimize for performance
             Tone.getContext().lookAhead = 0.2;
 
-            this.masterBus = new Tone.Gain(1.4);
+            this.masterBus = new Tone.Gain(1.2);
+
+            // Global FX Send/Return - One instance for ALL tracks
+            this.globalReverb = new Tone.Reverb({ decay: 3, wet: 1 }).toDestination();
+            this.globalDelay = new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.5, wet: 1 }).toDestination();
+
             const compressor = new Tone.Compressor({
-                threshold: -20,
-                ratio: 4,
-                attack: 0.05,
+                threshold: -18,
+                ratio: 5,
+                attack: 0.03,
                 release: 0.1
             });
-            const limiter = new Tone.Limiter(-1).toDestination();
+            const limiter = new Tone.Limiter(-0.5).toDestination();
             this.analyzer = new Tone.Analyser("fft", 1024);
 
             this.masterBus.chain(compressor, limiter, this.analyzer);
@@ -74,24 +81,23 @@ class AudioEngine {
     private getOrCreateTrackChain(id: string) {
         if (this.trackChains.has(id)) return this.trackChains.get(id)!;
 
-        // Create Nodes
         const input = new Tone.Gain();
         const pitch = new Tone.PitchShift(0);
         const filter = new Tone.Filter(20000, "lowpass");
         const dist = new Tone.Distortion(0);
         const sidechain = new Tone.Gain(1);
-        const reverb = new Tone.Reverb({ wet: 0, decay: 2.5 });
-        const delay = new Tone.FeedbackDelay({ wet: 0, delayTime: "8n", feedback: 0.4 });
+        const sendReverb = new Tone.Gain(0);
+        const sendDelay = new Tone.Gain(0);
         const volume = new Tone.Volume(0);
 
-        // Connect Chain: Input -> Pitch -> Filter -> Dist -> Sidechain -> Reverb -> Delay -> Volume -> Master
-        if (this.masterBus) {
-            input.chain(pitch, filter, dist, sidechain, reverb, delay, volume, this.masterBus);
-        } else {
-            input.chain(pitch, filter, dist, sidechain, reverb, delay, volume, Tone.getDestination());
-        }
+        // Efficiency: Input -> Pitch -> Filter -> Dist -> Sidechain -> Volume -> Master
+        input.chain(pitch, filter, dist, sidechain, volume, this.masterBus || Tone.getDestination());
 
-        const chain = { input, pitch, filter, dist, sidechain, reverb, delay, volume };
+        // Parallel FX Sends: Pipe audio to global shared effects
+        if (this.globalReverb) sidechain.connect(sendReverb).connect(this.globalReverb);
+        if (this.globalDelay) sidechain.connect(sendDelay).connect(this.globalDelay);
+
+        const chain = { input, pitch, filter, dist, sidechain, sendReverb, sendDelay, volume };
         this.trackChains.set(id, chain);
         return chain;
     }
@@ -334,10 +340,10 @@ class AudioEngine {
                 chain.volume.volume.rampTo(db, 0.05);
                 break;
             case 'reverb':
-                chain.reverb.wet.rampTo(value, 0.05);
+                chain.sendReverb.gain.rampTo(value, 0.05); // Adjusting send level instead of wet/dry
                 break;
             case 'delay':
-                chain.delay.wet.rampTo(value, 0.05);
+                chain.sendDelay.gain.rampTo(value, 0.05);
                 break;
             case 'filter':
                 // Logarithmic frequency mapping

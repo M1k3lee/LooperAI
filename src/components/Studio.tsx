@@ -6,7 +6,10 @@ import { audioEngine } from '@/lib/audioEngine';
 import VoiceRecorder from './VoiceRecorder';
 import BackgroundViz from './BackgroundViz';
 import TrackLane from './TrackLane';
-import { Play, Pause, Square, Music2, Layers, Sparkles, HelpCircle, Save, Volume2, Settings2, Trash2, Edit3, Grid, Waves, Sliders, ArrowUpCircle, Zap, Plus, Mic, Settings, Layout, BarChart, Info, Activity, Download, Disc } from 'lucide-react';
+import {
+    Play, Square, Music2, Layers, Sparkles, HelpCircle, Save,
+    Zap, Mic, Layout, Download, Disc, Search, Command, Menu, X, Plus, Info, ArrowUpRight
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import LoopBrowser from './LoopBrowser';
@@ -24,158 +27,56 @@ export default function Studio() {
     const [mounted, setMounted] = useState(false);
     const [localPrompt, setLocalPrompt] = useState('');
     const [error, setError] = useState<string | null>(null);
-    const [view, setView] = useState<'arrangement' | 'session'>('arrangement');
-    const [showHelp, setShowHelp] = useState(true);
+    const [activeTab, setActiveTab] = useState<'forge' | 'library' | 'history'>('forge');
     const [showSidebar, setShowSidebar] = useState(false);
     const [proLoops, setProLoops] = useState<any[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setMounted(true);
-        // Auto-load last session from localStorage
         const saved = localStorage.getItem('pulseforge_session');
         if (saved) {
             try {
                 const data = JSON.parse(saved);
                 if (data.tracks) setTracks(data.tracks);
                 if (data.bpm) setBpm(data.bpm);
-            } catch (e) {
-                console.error("Failed to load session", e);
-            }
+            } catch (e) { console.error("Session load fail", e); }
         }
 
-        // Load Pro Loops for smart matching
         fetch('/loops/library.json')
             .then(res => res.json())
             .then(data => setProLoops(data))
             .catch(e => console.error("Library load fail", e));
     }, [setTracks, setBpm]);
 
-    // Auto-save session
     useEffect(() => {
         if (mounted) {
             localStorage.setItem('pulseforge_session', JSON.stringify({ tracks, bpm }));
         }
     }, [tracks, bpm, mounted]);
 
-    const downloadSession = () => {
-        const data = JSON.stringify({ tracks, bpm, version: '1.0' }, null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `PulseForge_Session_${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-    };
-
-    const importSession = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const data = JSON.parse(ev.target?.result as string);
-                if (data.tracks) setTracks(data.tracks);
-                if (data.bpm) setBpm(data.bpm);
-            } catch (e) {
-                setError("Invalid session file.");
-            }
-        };
-        reader.readAsText(file);
-    };
-
     const handleTogglePlay = async () => {
         const engine = audioEngine;
         if (!engine) return;
-        if (!isPlaying) {
-            await engine.startTransport();
-        } else {
-            engine.stopTransport();
-        }
+        if (!isPlaying) await engine.startTransport();
+        else engine.stopTransport();
         togglePlay();
     };
 
-    const extractTrackName = (prompt: string, type: string) => {
-        // Return first 3-4 words of prompt for a clean but descriptive name
-        const words = prompt.trim().split(/\s+/);
-        const name = words.length > 3 ? words.slice(0, 4).join(' ') : prompt;
-        return name.toUpperCase();
-    };
-
-    const getPatternByStyle = (prompt: string, type: string) => {
-        const p = prompt.toLowerCase();
-        const isKick = p.includes('kick');
-        const isSnare = p.includes('snare') || p.includes('clap');
-        const isHat = p.includes('hat') || p.includes('shaker');
-        const isBass = type === 'bass';
-
-        // DUBSTEP / TRAP / RIDDIM / FUTURE BASS (Half-time feel)
-        if (p.includes('dubstep') || p.includes('trap') || p.includes('riddim') || p.includes('future bass') || p.includes('hip hop')) {
-            if (isKick) return [true, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false];
-            if (isSnare) return [false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false];
-            if (isHat) return [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false];
-            if (isBass) return [true, false, false, false, false, false, false, false, true, false, true, false, false, false, false, false];
-            return [true, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false];
-        }
-
-        // HOUSE / TECHNO (Four on the floor)
-        if (p.includes('house') || p.includes('techno') || p.includes('edm') || p.includes('industrial')) {
-            if (isKick) return [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false];
-            if (isSnare) return [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false];
-            if (isHat) return [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false];
-            return [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false];
-        }
-
-        // DEFAULT (Safe 4/4)
-        if (isKick) return [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false];
-        if (isHat) return [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false];
-        return [false, false, true, false, false, false, true, false, false, false, true, false, false, false, true, false];
-    };
-
-    const addRiser = () => {
-        const engine = audioEngine;
-        if (!engine) return;
-        const trackId = `riser_${Math.random().toString(36).substr(2, 5)}`;
-        addTrack({
-            id: trackId,
-            name: "FX RISER",
-            type: 'synth',
-            url: '',
-            color: '#3b82f6',
-            isActive: true,
-            bpm: bpm
-        });
-        engine.createNoiseRiser(trackId, 4);
-    };
-
-    const buildFullDrop = async () => {
-        setGenerating(true);
-        // Build 3 layers with distinct patterns
-        await handleGenerate('drums');
-        setTimeout(() => handleGenerate('bass'), 500);
-        setTimeout(() => handleGenerate('lead'), 1000);
-    };
-
     const handleGenerate = async (suggestedType: string = 'synth', audioBlob?: Blob) => {
-        const adjectives = ["vibrant", "pulsating", "distorted", "ethereal", "cinematic", "aggressive", "soft", "high-energy"];
-        const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-        const currentPrompt = localPrompt || (audioBlob ? `Professional EDM melody from voice, ${randomAdj} texture` : "");
+        const currentPrompt = localPrompt || (audioBlob ? "Professional EDM melody from voice" : "");
         if (!currentPrompt && !audioBlob) return;
+
         setGenerating(true);
         setError(null);
-        setShowHelp(false);
 
         let type = suggestedType;
         const pl = currentPrompt.toLowerCase();
-        if (pl.includes('drum') || pl.includes('kick') || pl.includes('snare') || pl.includes('hat') || pl.includes('clap') || pl.includes('perc')) type = 'drums';
-        if (pl.includes('bass') || pl.includes('sub')) type = 'bass';
-        if (pl.includes('lead') || pl.includes('synth') || pl.includes('melody')) type = 'lead';
-        if (pl.includes('fx') || pl.includes('riser') || pl.includes('impact')) type = 'fx';
+        if (pl.includes('drum') || pl.includes('kick')) type = 'drums';
+        if (pl.includes('bass')) type = 'bass';
+        if (pl.includes('lead') || pl.includes('synth')) type = 'lead';
 
-        const variation = Math.random().toString(36).substring(7);
-        const finalPrompt = audioBlob
-            ? `${currentPrompt} (Variation: ${variation})`
-            : currentPrompt;
+        const finalPrompt = audioBlob ? `${currentPrompt} (Variation: ${Math.random().toString(36).substring(7)})` : currentPrompt;
 
         try {
             const engine = audioEngine;
@@ -187,7 +88,6 @@ export default function Studio() {
             const nluRes = await axios.post<NLUDecision>('/api/command', { command: currentPrompt });
             const params = nluRes.data.params || {};
 
-            // SMART MATCH: If AI suggests a pro loop category, use it!
             if (params.loopCategory && proLoops.length > 0) {
                 const categoryLoops = proLoops.filter(l => l.category === params.loopCategory);
                 if (categoryLoops.length > 0) {
@@ -212,88 +112,38 @@ export default function Studio() {
             }
 
             const trackId = Math.random().toString(36).substr(2, 9);
-            const humanName = audioBlob
-                ? (localPrompt ? `VOICE: ${extractTrackName(localPrompt, type)}` : "VOICE FORGE")
-                : extractTrackName(currentPrompt, type);
+            const humanName = (localPrompt || "VOICE FORGE").toUpperCase();
 
-            if (response.data.useLocalFallback && engine) {
-                const stylePattern = getPatternByStyle(currentPrompt, type);
-
-                addTrack({
-                    id: trackId,
-                    name: `LOCAL ${humanName}`,
-                    type: type as any,
-                    url: '',
-                    color: type === 'drums' ? '#a855f7' : '#ec4899',
-                    isActive: true,
-                    bpm: bpm,
-                    pattern: stylePattern
-                });
-
-                if (type === 'drums') engine.createLocalDrumLoop(trackId, humanName, stylePattern, currentPrompt);
-                else {
-                    if (audioBlob) engine.createLocalLead(trackId, stylePattern, currentPrompt);
-                    else engine.createLocalBassline(trackId, stylePattern, currentPrompt);
-                }
-                setError("AI Cloud Busy - Using Styled Local Engine");
-            } else if (response.data.audio) {
+            if (response.data.audio) {
                 addTrack({
                     id: trackId,
                     name: response.data.name || humanName,
                     type: (response.data.type || type) as any,
                     url: response.data.audio,
-                    color: type === 'drums' ? '#a855f7' : '#ec4899',
+                    color: type === 'drums' ? '#a855f7' : type === 'bass' ? '#ec4899' : '#3b82f6',
                     isActive: true,
                     bpm: bpm
                 });
 
-                if (engine && params) {
-                    Object.entries(params).forEach(([fx, val]) => {
-                        engine.updateEffect(trackId, fx, (val as number));
-                    });
-                }
-
                 if (engine) {
+                    Object.entries(params).forEach(([fx, val]) => engine.updateEffect(trackId, fx, (val as number)));
                     await engine.playTrack(trackId, response.data.audio);
                 }
             }
-
             setLocalPrompt('');
         } catch (err: any) {
-            setError(err.message || 'Forging failed.');
+            setError('Forging failed. Try a different prompt.');
         } finally {
             setGenerating(false);
         }
     };
 
-    const handleEffectChange = (id: string, type: string, value: number) => {
-        const engine = audioEngine;
-        if (engine) engine.updateEffect(id, type, value);
-    };
-
-    const handlePatternChange = (id: string, pattern: boolean[]) => {
-        const engine = audioEngine;
-        if (engine) engine.updateLocalPattern(id, pattern);
-        updateTrackPattern(id, pattern);
-    };
-
-    const removeAndStopTrack = (id: string) => {
-        const engine = audioEngine;
-        if (engine) engine.stopTrack(id);
-        removeTrack(id);
-    };
-
     const handleAddProLoop = async (loop: any, initialEffects: any = {}) => {
         const engine = audioEngine;
         if (!engine) return;
-
-        if (!isPlaying) {
-            await engine.startTransport();
-            togglePlay();
-        }
+        if (!isPlaying) { await engine.startTransport(); togglePlay(); }
 
         const trackId = `pro_${Math.random().toString(36).substr(2, 9)}`;
-
         addTrack({
             id: trackId,
             name: `PRO ${loop.name.split(' - ')[2] || loop.name}`.toUpperCase(),
@@ -304,17 +154,13 @@ export default function Studio() {
             bpm: bpm
         });
 
-        // Apply any initial effects (from NLU)
         if (initialEffects) {
             Object.entries(initialEffects).forEach(([fx, val]) => {
-                if (fx !== 'loopCategory') {
-                    engine.updateEffect(trackId, fx, (val as number));
-                }
+                if (fx !== 'loopCategory') engine.updateEffect(trackId, fx, (val as number));
             });
         }
 
         await engine.playTrack(trackId, `/${loop.path}`, loop.bpm);
-        setShowHelp(false);
     };
 
     if (!mounted) return null;
@@ -323,203 +169,160 @@ export default function Studio() {
         <div className="studio-container">
             <BackgroundViz />
 
-            <header className="top-bar flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setShowSidebar(!showSidebar)} className="md:hidden" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Layout size={20} color={showSidebar ? '#8b5cf6' : '#fff'} />
-                        </button>
-                        <div className="pulse-glow" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Zap size={20} color="white" fill="white" />
+            {/* Header / Nav */}
+            <header className="top-nav">
+                <div className="flex items-center gap-4">
+                    <button className="md:hidden" onClick={() => setShowSidebar(!showSidebar)}>
+                        {showSidebar ? <X size={20} /> : <Menu size={20} />}
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                            <Zap size={18} color="white" fill="white" />
                         </div>
-                        <h1 style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.05em', color: '#fff' }}>PULSE<span style={{ color: '#8b5cf6' }}>FORGE</span></h1>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '6px 20px', gap: '20px', border: '1px solid var(--glass-border)' }}>
-                        <button onClick={handleTogglePlay} style={{ background: 'none', border: 'none', cursor: 'pointer', color: isPlaying ? '#ef4444' : '#22c55e', transition: 'all 0.2s' }}>
-                            {isPlaying ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
-                        </button>
-                        <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.05)' }} />
-                        <div className="flex items-center gap-2">
-                            <span style={{ fontSize: '10px', fontWeight: 900, color: 'var(--fg-muted)' }}>BPM</span>
-                            <input type="number" value={bpm} onChange={(e) => {
-                                const newBpm = Number(e.target.value);
-                                setBpm(newBpm);
-                                if (audioEngine) audioEngine.setBpm(newBpm);
-                            }} style={{ background: 'none', border: 'none', color: '#fff', fontWeight: 900, width: '45px', fontSize: '15px', outline: 'none', textAlign: 'center' }} />
-                        </div>
+                        <h1 className="text-lg font-black tracking-tighter">PULSE<span className="text-purple-500">FORGE</span></h1>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ display: 'flex', background: '#141417', borderRadius: '10px', padding: '3px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <button onClick={() => setView('arrangement')} style={{ padding: '8px 16px', borderRadius: '8px', background: view === 'arrangement' ? '#27272a' : 'none', border: 'none', color: view === 'arrangement' ? '#fff' : '#71717a', fontSize: '10px', fontWeight: 800, cursor: 'pointer' }}>
-                            TIMELINE
-                        </button>
-                        <button onClick={() => setView('session')} style={{ padding: '8px 16px', borderRadius: '8px', background: view === 'session' ? '#27272a' : 'none', border: 'none', color: view === 'session' ? '#fff' : '#71717a', fontSize: '10px', fontWeight: 800, cursor: 'pointer' }}>
-                            SESSION
-                        </button>
-                    </div>
-                    <button onClick={() => setShowHelp(!showHelp)} style={{ background: 'none', border: 'none', color: showHelp ? '#8b5cf6' : 'rgba(255,255,255,0.2)', cursor: 'pointer' }}>
-                        <HelpCircle size={20} />
+                <div className="flex items-center gap-4 bg-white/5 border border-white/5 rounded-2xl p-1">
+                    <button onClick={handleTogglePlay} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isPlaying ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
+                        {isPlaying ? <Square size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
                     </button>
+                    <div className="flex items-center gap-2 px-3">
+                        <span className="text-[10px] font-black text-white/30 truncate">BPM</span>
+                        <input type="number" value={bpm} onChange={(e) => {
+                            const b = Number(e.target.value);
+                            setBpm(b);
+                            audioEngine?.setBpm(b);
+                        }} className="w-12 bg-transparent text-sm font-bold border-none outline-none text-center" />
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold text-white/60 hover:bg-white/10 transition-all">
+                        <Save size={14} /> EXPORT
+                    </button>
+                    <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
+                        <img src="https://api.dicebear.com/7.x/bottts/svg?seed=producer" className="w-full h-full" alt="profile" />
+                    </div>
                 </div>
             </header>
 
-            <main className="flex-1 flex overflow-hidden relative" style={{ zIndex: 10 }}>
-                <aside className={`sidebar ${showSidebar ? 'active' : ''} glass-panel`}>
-                    <div style={{ padding: '32px' }}>
-                        <div className="flex items-center gap-3" style={{ marginBottom: '32px' }}>
-                            <Sparkles size={16} color="#8b5cf6" className="pulse-glow" />
-                            <h2 style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Forge Station</h2>
-                        </div>
-
-                        <div style={{ background: 'rgba(139, 92, 246, 0.03)', borderRadius: '28px', padding: '28px', border: '1px solid var(--glass-border)', marginBottom: '32px' }}>
-                            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', lineHeight: '1.6', marginBottom: '24px' }}>Describe your sound then click Forge. Mix and layer AI results.</p>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                                <button className="glass-card" onClick={() => handleGenerate('drums')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', cursor: 'pointer', transition: 'all 0.3s' }}>
-                                    <Music2 size={24} color="#8b5cf6" style={{ marginBottom: '8px' }} />
-                                    <span style={{ fontSize: '9px', fontWeight: 900, color: '#fff' }}>HITS/DRUMS</span>
-                                </button>
-                                <button className="glass-card" onClick={() => handleGenerate('bass')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', cursor: 'pointer' }}>
-                                    <Layers size={24} color="#ec4899" style={{ marginBottom: '8px' }} />
-                                    <span style={{ fontSize: '9px', fontWeight: 900, color: '#fff' }}>FORGE BASS</span>
-                                </button>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <button className="glass-card" onClick={addRiser} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', cursor: 'pointer' }}>
-                                    <ArrowUpCircle size={24} color="#3b82f6" style={{ marginBottom: '8px' }} />
-                                    <span style={{ fontSize: '9px', fontWeight: 900, color: '#fff' }}>ADD RISER</span>
-                                </button>
-                                <button className="btn-primary" onClick={buildFullDrop} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', cursor: 'pointer' }}>
-                                    <Zap size={24} color="white" style={{ marginBottom: '8px' }} />
-                                    <span style={{ fontSize: '9px', fontWeight: 900 }}>FORGE DROP</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3" style={{ marginBottom: '16px' }}>
-                            <Mic size={16} color="#8b5cf6" />
-                            <h2 style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Voice Forge</h2>
-                        </div>
-                        <div style={{ marginBottom: '32px' }}>
-                            <VoiceRecorder onUpload={(blob) => handleGenerate('lead', blob)} />
-                        </div>
-
-                        <div className="flex items-center gap-3" style={{ marginBottom: '16px' }}>
-                            <Disc size={16} color="#8b5cf6" />
-                            <h2 style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Pro Library</h2>
-                        </div>
-                        <div style={{ marginBottom: '32px' }}>
-                            <LoopBrowser onAddLoop={handleAddProLoop} />
-                        </div>
-
-                        <div className="flex items-center gap-3" style={{ marginBottom: '16px' }}>
-                            <Save size={16} color="var(--accent)" />
-                            <h2 style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Management</h2>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>
-                            <button onClick={downloadSession} className="glass-card flex items-center gap-2" style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', color: '#fff', fontSize: '10px', fontWeight: 900, cursor: 'pointer' }}>
-                                <Save size={14} color="var(--accent)" /> EXPORT
+            <main className="flex-1 flex overflow-hidden">
+                {/* Sidebar - Pro Features */}
+                <aside className={`sidebar-premium ${showSidebar ? 'active' : ''}`}>
+                    <div className="flex p-6 gap-2">
+                        {['forge', 'library'].map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab as any)}
+                                className={`flex-1 py-1 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-purple-600 text-white shadow-lg' : 'text-white/40'}`}
+                            >
+                                {tab}
                             </button>
-                            <label className="glass-card flex items-center gap-2" style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', color: '#fff', fontSize: '10px', fontWeight: 900, cursor: 'pointer' }}>
-                                <Download size={14} color="#8b5cf6" /> IMPORT
-                                <input type="file" accept=".json" onChange={importSession} style={{ display: 'none' }} />
-                            </label>
-                        </div>
+                        ))}
                     </div>
-                </aside>
 
-                <section className="main-content">
-                    <div className="flex-1 p-8 overflow-y-auto custom-scrollbar" style={{ padding: '40px' }}>
-                        <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-                            {view === 'arrangement' ? (
-                                <div className="flex flex-col">
-                                    <div className="flex items-center justify-between" style={{ marginBottom: '48px' }}>
-                                        <h3 style={{ fontSize: '32px', fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Project Timeline</h3>
-                                        <div className="flex items-center gap-4">
-                                            <div style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase' }}>{tracks.length} Active Tracks</div>
+                    <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar">
+                        <AnimatePresence mode="wait">
+                            {activeTab === 'forge' ? (
+                                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="flex flex-col gap-6">
+                                    <div className="p-5 rounded-3xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/10">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <Sparkles size={16} className="text-purple-400" />
+                                            <h3 className="text-[11px] font-black text-white/40 uppercase tracking-widest">Global Forge</h3>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => handleGenerate('drums')} className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center gap-2 hover:bg-white/10 hover:border-white/10 transition-all">
+                                                <Music2 size={24} className="text-blue-400" />
+                                                <span className="text-[9px] font-bold">DRUMS</span>
+                                            </button>
+                                            <button onClick={() => handleGenerate('bass')} className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center gap-2 hover:bg-white/10 hover:border-white/10 transition-all">
+                                                <Layers size={24} className="text-pink-400" />
+                                                <span className="text-[9px] font-bold">BASS</span>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    {tracks.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {tracks.map(track => (
-                                                <TrackLane
-                                                    key={track.id}
-                                                    track={track}
-                                                    isPlaying={isPlaying}
-                                                    onRemove={removeAndStopTrack}
-                                                    onEffectChange={handleEffectChange}
-                                                    onPatternChange={handlePatternChange}
-                                                />
-                                            ))}
+                                    <div className="flex flex-col gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <Mic size={16} className="text-purple-400" />
+                                            <h3 className="text-[11px] font-black text-white/40 uppercase tracking-widest">Voice Forge</h3>
                                         </div>
-                                    ) : (
-                                        <div style={{ height: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '2px dashed rgba(255,255,255,0.05)', borderRadius: '32px' }}>
-                                            <Sparkles size={48} color="rgba(255,255,255,0.1)" style={{ marginBottom: '24px' }} />
-                                            <p style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '14px' }}>FORGE YOUR FIRST SOUND TO BEGIN</p>
-                                        </div>
-                                    )}
-                                </div>
+                                        <VoiceRecorder onUpload={(blob) => handleGenerate('lead', blob)} />
+                                    </div>
+                                </motion.div>
                             ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
-                                    {[...Array(8)].map((_, i) => (
-                                        <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '24px', aspectRatio: '1/1', padding: '32px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => handleGenerate('synth')}>
-                                            <Plus size={20} color="rgba(255,255,255,0.1)" style={{ alignSelf: 'flex-end' }} />
-                                            <div>
-                                                <span style={{ fontSize: '10px', fontWeight: 900, color: 'rgba(255,255,255,0.1)', textTransform: 'uppercase' }}>SLOT {i + 1}</span>
-                                                <span style={{ display: 'block', fontSize: '13px', fontWeight: 900, color: 'rgba(255,255,255,0.2)', marginTop: '8px' }}>FORGE CLIP</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+                                    <LoopBrowser onAddLoop={handleAddProLoop} />
+                                </motion.div>
                             )}
+                        </AnimatePresence>
+                    </div>
+                </aside>
+
+                {/* Main Arrangement Area */}
+                <section className="flex-1 flex flex-col relative">
+                    <div className="tracks-container custom-scrollbar">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-3xl font-black tracking-tight">Timeline</h2>
+                            <div className="flex items-center gap-4 text-xs font-bold text-white/20">
+                                {tracks.length} TRACKS • {isPlaying ? 'PLAYING' : 'IDLE'}
+                            </div>
                         </div>
+
+                        {tracks.length > 0 ? (
+                            tracks.map(track => (
+                                <TrackLane
+                                    key={track.id}
+                                    track={track}
+                                    isPlaying={isPlaying}
+                                    onRemove={(id) => {
+                                        audioEngine?.stopTrack(id);
+                                        removeTrack(id);
+                                    }}
+                                    onEffectChange={(id, type, val) => audioEngine?.updateEffect(id, type, val)}
+                                    onPatternChange={(id, p) => {
+                                        audioEngine?.updateLocalPattern(id, p);
+                                        updateTrackPattern(id, p);
+                                    }}
+                                />
+                            ))
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[40px] p-20 text-center">
+                                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6">
+                                    <Sparkles size={32} className="text-white/10" />
+                                </div>
+                                <h4 className="text-lg font-bold text-white/60 mb-2">Your Studio is Empty</h4>
+                                <p className="text-sm text-white/20 max-w-xs">Forge a sound or browse the library to begin your next banger.</p>
+                            </div>
+                        )}
                     </div>
 
-                    <div style={{ height: '120px', background: '#0a0a0c', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 48px', position: 'relative' }}>
-                        <div style={{ position: 'relative', width: '100%', maxWidth: '1000px' }}>
-                            {isGenerating && (
-                                <div style={{ position: 'absolute', top: '-1px', left: 0, width: '100%', height: '2px', overflow: 'hidden', zIndex: 10 }}>
-                                    <div className="animate-progress" style={{ height: '100%', background: 'linear-gradient(90deg, transparent, #8b5cf6, transparent)', width: '100%' }} />
-                                </div>
-                            )}
-                            <Mic size={24} color="rgba(255,255,255,0.1)" style={{ position: 'absolute', left: '28px', top: '50%', transform: 'translateY(-50%)' }} />
-                            <input
-                                ref={inputRef}
-                                value={localPrompt}
-                                onChange={(e) => setLocalPrompt(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                                placeholder="Forge your vision: 'Heavy industrial techno kick' or 'Deep melodic bass'..."
-                                style={{ width: '100%', height: '72px', background: '#141417', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '0 180px 0 72px', color: '#fff', fontSize: '16px', fontWeight: 500, outline: 'none' }}
-                            />
-                            <button
-                                onClick={() => handleGenerate()}
-                                disabled={isGenerating || !localPrompt}
-                                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', height: '48px', padding: '0 28px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', border: 'none', borderRadius: '16px', color: '#fff', fontSize: '12px', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
-                            >
-                                <Zap size={16} fill="#fff" /> {isGenerating ? 'FORGING...' : 'FORGE AI'}
-                            </button>
+                    {/* Bottom Force Bar */}
+                    <div className="absolute bottom-6 left-6 right-6 flex items-center justify-center z-50">
+                        <div className="w-full max-w-3xl glass p-4 rounded-[32px] shadow-2xl shadow-black/50 border border-white/10">
+                            <div className="relative group">
+                                <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-purple-500 transition-colors" />
+                                <input
+                                    ref={inputRef}
+                                    value={localPrompt}
+                                    onChange={(e) => setLocalPrompt(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                                    placeholder="Make it a dark industrial techno lead..."
+                                    className="w-full h-16 bg-white/[0.03] rounded-2xl pl-16 pr-32 text-sm font-medium border border-transparent focus:border-purple-500/20 focus:bg-white/[0.06] outline-none transition-all"
+                                />
+                                <button
+                                    onClick={() => handleGenerate()}
+                                    disabled={isGenerating || !localPrompt}
+                                    className="absolute right-2 top-2 bottom-2 px-6 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 font-black text-[10px] tracking-widest text-white uppercase shadow-lg shadow-purple-500/20 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2"
+                                >
+                                    {isGenerating ? 'Forging...' : <><Zap size={14} fill="white" /> Forge</>}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </section>
             </main>
-
-            <AnimatePresence>
-                {error && (
-                    <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} style={{ position: 'fixed', bottom: '140px', right: '40px', background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '16px 24px', borderRadius: '16px', color: '#fff', fontSize: '12px', fontWeight: 900, backdropFilter: 'blur(20px)', zIndex: 1000 }}>
-                        <Info size={16} color="#8b5cf6" style={{ marginRight: '8px', verticalAlign: 'middle' }} /> {error}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <style>{`
-                .animate-progress { animation: progress 2s infinite linear; }
-                @keyframes progress { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-                .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
-            `}</style>
         </div>
     );
 }
