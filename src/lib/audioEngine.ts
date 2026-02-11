@@ -24,12 +24,10 @@ class AudioEngine {
     constructor() {
         if (typeof window !== 'undefined') {
             console.log("[PulseForge] Audio Core Initializing...");
-            // Optimize for performance
             Tone.getContext().lookAhead = 0.2;
 
             this.masterBus = new Tone.Gain(1.2);
 
-            // Global FX Send/Return - One instance for ALL tracks
             this.globalReverb = new Tone.Reverb({ decay: 3, wet: 1 }).toDestination();
             this.globalDelay = new Tone.FeedbackDelay({ delayTime: "8n", feedback: 0.5, wet: 1 }).toDestination();
 
@@ -70,8 +68,6 @@ class AudioEngine {
 
     setBpm(bpm: number) {
         Tone.Transport.bpm.rampTo(bpm, 0.1);
-
-        // Update all active players playback rate
         this.players.forEach((player, id) => {
             const meta = this.playerMetadata.get(id);
             if (meta) {
@@ -93,10 +89,8 @@ class AudioEngine {
         const sendDelay = new Tone.Gain(0);
         const volume = new Tone.Volume(0);
 
-        // Efficiency: Input -> Pitch -> Filter -> Dist -> Sidechain -> Volume -> Master
         input.chain(pitch, filter, dist, sidechain, volume, this.masterBus || Tone.getDestination());
 
-        // Parallel FX Sends: Pipe audio to global shared effects
         if (this.globalReverb) sidechain.connect(sendReverb).connect(this.globalReverb);
         if (this.globalDelay) sidechain.connect(sendDelay).connect(this.globalDelay);
 
@@ -105,13 +99,9 @@ class AudioEngine {
         return chain;
     }
 
-    // Trigger sidechain ducking globally
     private triggerSidechainDucking(time: number) {
         const duckDuration = "8n";
         this.trackChains.forEach((chain, id) => {
-            // Only duck non-kick tracks that have sidechain enabled
-            // (We'll store specific track tags in a metadata map if needed, 
-            // but for now we duck everything that isn't the trigger)
             const trackType = this.synths.get(id)?.type;
             if (trackType !== 'kick') {
                 chain.sidechain.gain.cancelScheduledValues(time);
@@ -136,7 +126,6 @@ class AudioEngine {
                 const duration = player.buffer.duration;
 
                 if (url.startsWith('data:audio') || url.includes('/generate')) {
-                    const beatsAt120 = duration * 2; // Rough estimate
                     const beats = duration * (Tone.Transport.bpm.value / 60);
                     const targetBeats = beats > 12 ? 16 : 8;
                     finalOriginalBpm = (targetBeats / duration) * 60;
@@ -146,7 +135,6 @@ class AudioEngine {
                 const ratio = Tone.Transport.bpm.value / finalOriginalBpm;
                 player.playbackRate = ratio;
 
-                // QUANTIZATION: Start on next bar if playing
                 const startTime = Tone.Transport.state === 'started'
                     ? Tone.Transport.nextSubdivision("1m")
                     : 0;
@@ -160,46 +148,66 @@ class AudioEngine {
         this.players.set(id, player);
     }
 
+    // --- ALGORITHMIC COMPOSITION HELPERS ---
+
+    private getEuclideanPattern(k: number, n: number): boolean[] {
+        let pattern = Array(n).fill(false);
+        if (k === 0) return pattern;
+        if (k >= n) return Array(n).fill(true);
+        for (let i = 0; i < k; i++) {
+            const index = Math.floor(i * n / k);
+            if (index < n) pattern[index] = true;
+        }
+        return pattern;
+    }
+
+    private getScaleNote(index: number, octave: number = 3): string {
+        const scale = ["C", "D#", "F", "G", "A#"];
+        const noteIndex = index % scale.length;
+        const note = scale[noteIndex];
+        const octaveShift = Math.floor(index / scale.length);
+        return `${note}${octave + octaveShift}`;
+    }
+
     createLocalDrumLoop(id: string, name: string = "Drum", initialPattern?: boolean[], prompt: string = "") {
         const chain = this.getOrCreateTrackChain(id);
         const pl = prompt.toLowerCase();
         const isKick = pl.includes('kick');
         const isHat = pl.includes('hat') || pl.includes('shaker');
-        const isIndustrial = pl.includes('industrial') || pl.includes('dubstep');
+        const isIndustrial = pl.includes('industrial') || pl.includes('techno');
 
         let synth: any;
+        let patternArray: boolean[];
+
         if (isKick) {
             synth = new Tone.MembraneSynth({
                 envelope: { sustain: 0, attack: 0.001, decay: isIndustrial ? 0.4 : 0.2 },
                 octaves: isIndustrial ? 10 : 4,
                 pitchDecay: 0.05
             });
+            patternArray = initialPattern || this.getEuclideanPattern(4, 16);
         } else if (isHat) {
             synth = new Tone.NoiseSynth({
                 noise: { type: "white" },
                 envelope: { sustain: 0, attack: 0.001, decay: 0.05 }
             });
+            patternArray = initialPattern || Array(16).fill(false).map((_, i) => i % 2 !== 0);
         } else {
-            // Snare / Clap style
             synth = new Tone.NoiseSynth({
                 noise: { type: isIndustrial ? "pink" : "white" },
                 envelope: { sustain: 0, attack: 0.002, decay: isIndustrial ? 0.4 : 0.15 }
             });
+            patternArray = initialPattern || [false, false, false, false, true, false, false, false, false, false, false, false, true, false, false, false];
         }
 
-        // CONNECT TO CHAIN INPUT
         synth.connect(chain.input);
-
-        const patternArray = initialPattern ? [...initialPattern] : [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false];
 
         const loop = new Tone.Loop(time => {
             const current = this.synths.get(id);
             if (!current) return;
-
             const ticksPer16th = Tone.Transport.PPQ / 4;
             const scheduledTick = Tone.Transport.getTicksAtTime(time);
             const currentStep = Math.round(scheduledTick / ticksPer16th) % 16;
-
             if (current.pattern[currentStep]) {
                 if (isKick) {
                     (synth as Tone.MembraneSynth).triggerAttackRelease(isIndustrial ? "B0" : "C1", "8n", time);
@@ -223,70 +231,70 @@ class AudioEngine {
             filterEnvelope: { attack: 0.1, baseFrequency: isDark ? 60 : 150, octaves: 4 }
         }).connect(chain.input);
 
-        const patternArray = initialPattern ? [...initialPattern] : [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false];
+        let pattern = initialPattern;
+        if (!pattern) {
+            const rhythm = this.getEuclideanPattern(5, 16);
+            pattern = [...rhythm.slice(2), ...rhythm.slice(0, 2)];
+        }
 
         const loop = new Tone.Loop(time => {
             const current = this.synths.get(id);
             if (!current) return;
-
             const ticksPer16th = Tone.Transport.PPQ / 4;
             const scheduledTick = Tone.Transport.getTicksAtTime(time);
             const currentStep = Math.round(scheduledTick / ticksPer16th) % 16;
-
             if (current.pattern[currentStep]) {
-                synth.triggerAttackRelease(isDark ? "E1" : "C2", "16n", time);
+                const noteIndex = Math.random() > 0.8 ? 3 : 0;
+                const note = this.getScaleNote(noteIndex, 1);
+                synth.triggerAttackRelease(note, "16n", time);
             }
         }, "16n").start(0);
 
-        this.synths.set(id, { synth, loop, pattern: patternArray, type: 'bass' });
+        this.synths.set(id, { synth, loop, pattern: pattern, type: 'bass' });
     }
 
     createLocalLead(id: string, initialPattern?: boolean[], prompt: string = "") {
         const chain = this.getOrCreateTrackChain(id);
         const pl = prompt.toLowerCase();
 
-        // High quality melodic synth
         const synth = new Tone.DuoSynth({
             vibratoAmount: 0.5,
             vibratoRate: 5,
             harmonicity: 1.5,
             voice0: {
-                oscillator: { type: "sawtooth" },
-                envelope: { attack: 0.1, decay: 0.3, sustain: 0.4, release: 1 }
+                oscillator: { type: "sine" },
+                filterEnvelope: { attack: 0.01, decay: 0, sustain: 1, release: 0.5 },
+                envelope: { attack: 0.01, decay: 0, sustain: 1, release: 0.5 }
             },
             voice1: {
-                oscillator: { type: "sine" },
-                envelope: { attack: 0.2, decay: 0.2, sustain: 0.3, release: 1 }
+                oscillator: { type: "sawtooth" },
+                filterEnvelope: { attack: 0.01, decay: 0, sustain: 1, release: 0.5 },
+                envelope: { attack: 0.01, decay: 0, sustain: 1, release: 0.5 }
             }
         }).connect(chain.input);
 
-        // Melodic pattern for hummed input
-        const patternArray = initialPattern ? [...initialPattern] : [true, false, false, true, false, false, true, false, true, false, false, true, false, true, false, false];
+        synth.volume.value = -10;
 
-        // Create a randomized melodic sequence from a solid EDM scale (C Minor/Dorian)
-        const scales = [
-            ["C3", "Eb3", "F3", "G3", "Bb3", "C4", "Bb3", "G3"],
-            ["C3", "D3", "Eb3", "F3", "G3", "A3", "Bb3", "C4"],
-            ["F2", "Ab2", "Bb2", "C3", "Eb3", "F3", "Eb3", "C3"]
-        ];
-        const selectedScale = scales[Math.floor(Math.random() * scales.length)];
-        const notes = Array.from({ length: 16 }, () => selectedScale[Math.floor(Math.random() * selectedScale.length)]);
+        chain.sendDelay.gain.value = 0.4;
+        chain.sendReverb.gain.value = 0.3;
+
+        const pattern = initialPattern || Array(16).fill(false).map(() => Math.random() > 0.7);
+        const melodySequence = Array(16).fill(0).map(() => Math.floor(Math.random() * 5));
 
         const loop = new Tone.Loop(time => {
             const current = this.synths.get(id);
             if (!current) return;
-
             const ticksPer16th = Tone.Transport.PPQ / 4;
             const scheduledTick = Tone.Transport.getTicksAtTime(time);
             const currentStep = Math.round(scheduledTick / ticksPer16th) % 16;
-
             if (current.pattern[currentStep]) {
-                const note = notes[currentStep];
-                synth.triggerAttackRelease(note, "8n", time);
+                const noteIdx = melodySequence[currentStep];
+                const note = this.getScaleNote(noteIdx, Math.random() > 0.9 ? 4 : 3);
+                synth.triggerAttackRelease(note, "16n", time);
             }
         }, "16n").start(0);
 
-        this.synths.set(id, { synth, loop, pattern: patternArray, type: 'lead' });
+        this.synths.set(id, { synth, loop, pattern: pattern, type: 'lead' });
     }
 
     createNoiseRiser(id: string, durationBars: number = 4) {
@@ -296,7 +304,6 @@ class AudioEngine {
             envelope: { attack: durationBars * 2, release: 0.1, sustain: 0.5 }
         }).connect(chain.input);
 
-        // Manual filter sweep for that pro riser sound
         chain.filter.frequency.setValueAtTime(100, Tone.now());
         chain.filter.frequency.exponentialRampToValueAtTime(15000, Tone.now() + (durationBars * 2));
 
@@ -338,32 +345,24 @@ class AudioEngine {
                 chain.volume.mute = !!value;
                 break;
             case 'volume':
-                // Map 0-1 to -60dB to +6dB for better range/boost
                 const db = value === 0 ? -Infinity : Tone.gainToDb(value * 2);
                 chain.volume.volume.rampTo(db, 0.05);
                 break;
             case 'reverb':
-                chain.sendReverb.gain.rampTo(value, 0.05); // Adjusting send level instead of wet/dry
+                chain.sendReverb.gain.rampTo(value, 0.05);
                 break;
             case 'delay':
                 chain.sendDelay.gain.rampTo(value, 0.05);
                 break;
             case 'filter':
-                // Logarithmic frequency mapping
                 const freq = 20 + (value * 19980);
                 chain.filter.frequency.rampTo(freq, 0.05);
                 break;
             case 'pitch':
-                // Pitch Shift is in semitones (-12 to 12)
                 chain.pitch.pitch = (value - 0.5) * 24;
                 break;
             case 'dist':
                 chain.dist.distortion = value;
-                break;
-            case 'pump':
-                // This resets the base gain manually, but triggerSidechainDucking 
-                // is what actually performs the ducking movement.
-                chain.sidechain.gain.rampTo(1, 0.05);
                 break;
         }
     }
