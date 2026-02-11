@@ -192,7 +192,7 @@ export default function Studio() {
                 const categoryLoops = proLoops.filter(l => l.category === params.loopCategory);
                 if (categoryLoops.length > 0) {
                     const randomLoop = categoryLoops[Math.floor(Math.random() * categoryLoops.length)];
-                    await handleAddProLoop(randomLoop);
+                    await handleAddProLoop(randomLoop, params);
                     setLocalPrompt('');
                     return;
                 }
@@ -283,7 +283,7 @@ export default function Studio() {
         removeTrack(id);
     };
 
-    const handleAddProLoop = async (loop: any) => {
+    const handleAddProLoop = async (loop: any, initialEffects: any = {}) => {
         const engine = audioEngine;
         if (!engine) return;
 
@@ -303,6 +303,15 @@ export default function Studio() {
             isActive: true,
             bpm: bpm
         });
+
+        // Apply any initial effects (from NLU)
+        if (initialEffects) {
+            Object.entries(initialEffects).forEach(([fx, val]) => {
+                if (fx !== 'loopCategory') {
+                    engine.updateEffect(trackId, fx, (val as number));
+                }
+            });
+        }
 
         await engine.playTrack(trackId, `/${loop.path}`, loop.bpm);
         setShowHelp(false);
