@@ -34,6 +34,8 @@ body {
   width: 100vw;
   margin: 0;
   padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Base Layout Classes - Explicitly defined without Tailwind */
@@ -145,6 +147,7 @@ body {
   flex-shrink: 0 !important;
   height: 100% !important;
   overflow-y: auto !important;
+  transition: transform 0.3s ease;
 }
 
 .main-content {
@@ -157,13 +160,64 @@ body {
 }
 
 .bottom-panel {
-  height: 112px !important;
+  height: auto !important;
+  min-height: 112px !important;
   border-top: 1px solid var(--border-subtle) !important;
   background: var(--bg-panel) !important;
   backdrop-filter: blur(20px);
-  padding: 0 2rem !important;
+  padding: 1rem 2rem !important;
   z-index: 50 !important;
   flex-shrink: 0 !important;
+}
+
+/* Mobile Breakpoints */
+@media (max-width: 768px) {
+  .top-bar {
+    height: 56px !important;
+    padding: 0 1rem !important;
+    backdrop-filter: none !important;
+    /* Performance */
+    background: #08080a !important;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 56px;
+    bottom: 0;
+    width: 100vw !important;
+    z-index: 100;
+    transform: translateX(-100%);
+    backdrop-filter: none !important;
+    background: #08080a !important;
+  }
+
+  .sidebar.active {
+    transform: translateX(0);
+  }
+
+  .bottom-panel {
+    padding: 0.75rem 1rem !important;
+    backdrop-filter: none !important;
+    background: #08080a !important;
+  }
+
+  .studio-container {
+    height: 100svh !important;
+    /* Supports dynamic mobile bars */
+  }
+
+  .glass-card,
+  .glass-panel {
+    backdrop-filter: none !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+  }
+
+  /* Hide decorations to save mobile GPU */
+  .pulse-glow,
+  .hyper-glow {
+    box-shadow: none !important;
+  }
 }
 
 /* Grid & Components */

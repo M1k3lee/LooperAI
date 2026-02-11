@@ -26,6 +26,7 @@ export default function Studio() {
     const [error, setError] = useState<string | null>(null);
     const [view, setView] = useState<'arrangement' | 'session'>('arrangement');
     const [showHelp, setShowHelp] = useState(true);
+    const [showSidebar, setShowSidebar] = useState(false);
     const [proLoops, setProLoops] = useState<any[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -316,10 +317,13 @@ export default function Studio() {
             <header className="top-bar flex items-center justify-between">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
-                        <div className="pulse-glow" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px var(--primary-glow)' }}>
+                        <button onClick={() => setShowSidebar(!showSidebar)} className="md:hidden" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Layout size={20} color={showSidebar ? '#8b5cf6' : '#fff'} />
+                        </button>
+                        <div className="pulse-glow" style={{ width: '36px', height: '36px', background: 'linear-gradient(135deg, #8b5cf6, #ec4899)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <Zap size={20} color="white" fill="white" />
                         </div>
-                        <h1 style={{ fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.05em', color: '#fff' }}>PULSE<span style={{ color: '#8b5cf6' }}>FORGE</span></h1>
+                        <h1 style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '-0.05em', color: '#fff' }}>PULSE<span style={{ color: '#8b5cf6' }}>FORGE</span></h1>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '6px 20px', gap: '20px', border: '1px solid var(--glass-border)' }}>
@@ -354,7 +358,7 @@ export default function Studio() {
             </header>
 
             <main className="flex-1 flex overflow-hidden relative" style={{ zIndex: 10 }}>
-                <aside className="sidebar glass-panel">
+                <aside className={`sidebar ${showSidebar ? 'active' : ''} glass-panel`}>
                     <div style={{ padding: '32px' }}>
                         <div className="flex items-center gap-3" style={{ marginBottom: '32px' }}>
                             <Sparkles size={16} color="#8b5cf6" className="pulse-glow" />

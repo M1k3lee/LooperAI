@@ -21,13 +21,20 @@ class AudioEngine {
     constructor() {
         if (typeof window !== 'undefined') {
             console.log("[PulseForge] Audio Core Initializing...");
-            // Increase lookahead to prevent cracking on slower systems
-            Tone.getContext().lookAhead = 0.1;
+            // Higher lookahead for mobile CPU stability
+            Tone.getContext().lookAhead = 0.2;
 
-            this.masterBus = new Tone.Gain(2.0); // Boosted master for web audio parity
-            const limiter = new Tone.Limiter(-0.5).toDestination();
+            this.masterBus = new Tone.Gain(1.4);
+            const compressor = new Tone.Compressor({
+                threshold: -20,
+                ratio: 4,
+                attack: 0.05,
+                release: 0.1
+            });
+            const limiter = new Tone.Limiter(-1).toDestination();
             this.analyzer = new Tone.Analyser("fft", 1024);
-            this.masterBus.chain(limiter, this.analyzer);
+
+            this.masterBus.chain(compressor, limiter, this.analyzer);
         }
     }
 
@@ -331,7 +338,7 @@ class AudioEngine {
                 break;
             case 'volume':
                 // Map 0-1 to -60dB to +6dB for better range/boost
-                const db = value === 0 ? -Infinity : Tone.gainToDb(value * 4);
+                const db = value === 0 ? -Infinity : Tone.gainToDb(value * 2);
                 chain.volume.volume.rampTo(db, 0.05);
                 break;
             case 'reverb':
