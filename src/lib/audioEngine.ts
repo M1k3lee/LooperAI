@@ -96,7 +96,7 @@ class AudioEngine {
         });
     }
 
-    async playTrack(id: string, url: string) {
+    async playTrack(id: string, url: string, originalBpm: number = 126) {
         if (this.players.has(id)) return;
 
         const chain = this.getOrCreateTrackChain(id);
@@ -105,10 +105,20 @@ class AudioEngine {
             loop: true,
             autostart: false,
             onload: () => {
+                // Initial sync
+                const ratio = Tone.Transport.bpm.value / originalBpm;
+                player.playbackRate = ratio;
                 player.sync().start(0);
-                console.log(`[PulseForge] AI Track Synced: ${id}`);
+                console.log(`[PulseForge] Track Synced (${originalBpm} -> ${Tone.Transport.bpm.value.toFixed(1)}): ${id}`);
             }
         });
+
+        // Dynamic BPM sync
+        const bpmListener = () => {
+            const ratio = Tone.Transport.bpm.value / originalBpm;
+            player.playbackRate = ratio;
+        };
+        Tone.Transport.on('start', bpmListener); // Re-sync on start just in case
 
         player.connect(chain.input);
         this.players.set(id, player);

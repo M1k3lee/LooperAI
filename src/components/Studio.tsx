@@ -6,9 +6,10 @@ import { audioEngine } from '@/lib/audioEngine';
 import VoiceRecorder from './VoiceRecorder';
 import BackgroundViz from './BackgroundViz';
 import TrackLane from './TrackLane';
-import { Play, Pause, Square, Music2, Layers, Sparkles, HelpCircle, Save, Volume2, Settings2, Trash2, Edit3, Grid, Waves, Sliders, ArrowUpCircle, Zap, Plus, Mic, Settings, Layout, BarChart, Info, Activity, Download } from 'lucide-react';
+import { Play, Pause, Square, Music2, Layers, Sparkles, HelpCircle, Save, Volume2, Settings2, Trash2, Edit3, Grid, Waves, Sliders, ArrowUpCircle, Zap, Plus, Mic, Settings, Layout, BarChart, Info, Activity, Download, Disc } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import LoopBrowser from './LoopBrowser';
 
 interface NLUDecision {
     params: Record<string, number>;
@@ -25,6 +26,7 @@ export default function Studio() {
     const [error, setError] = useState<string | null>(null);
     const [view, setView] = useState<'arrangement' | 'session'>('arrangement');
     const [showHelp, setShowHelp] = useState(true);
+    const [proLoops, setProLoops] = useState<any[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -40,6 +42,12 @@ export default function Studio() {
                 console.error("Failed to load session", e);
             }
         }
+
+        // Load Pro Loops for smart matching
+        fetch('/loops/library.json')
+            .then(res => res.json())
+            .then(data => setProLoops(data))
+            .catch(e => console.error("Library load fail", e));
     }, [setTracks, setBpm]);
 
     // Auto-save session
@@ -169,6 +177,18 @@ export default function Studio() {
             }
 
             const nluRes = await axios.post<NLUDecision>('/api/command', { command: currentPrompt });
+            const params = nluRes.data.params || {};
+
+            // SMART MATCH: If AI suggests a pro loop category, use it!
+            if (params.loopCategory && proLoops.length > 0) {
+                const categoryLoops = proLoops.filter(l => l.category === params.loopCategory);
+                if (categoryLoops.length > 0) {
+                    const randomLoop = categoryLoops[Math.floor(Math.random() * categoryLoops.length)];
+                    await handleAddProLoop(randomLoop);
+                    setLocalPrompt('');
+                    return;
+                }
+            }
 
             let response;
             if (audioBlob) {
@@ -217,9 +237,9 @@ export default function Studio() {
                     bpm: bpm
                 });
 
-                if (engine && nluRes.data.params) {
-                    Object.entries(nluRes.data.params).forEach(([fx, val]) => {
-                        engine.updateEffect(trackId, fx, val);
+                if (engine && params) {
+                    Object.entries(params).forEach(([fx, val]) => {
+                        engine.updateEffect(trackId, fx, (val as number));
                     });
                 }
 
@@ -251,6 +271,31 @@ export default function Studio() {
         const engine = audioEngine;
         if (engine) engine.stopTrack(id);
         removeTrack(id);
+    };
+
+    const handleAddProLoop = async (loop: any) => {
+        const engine = audioEngine;
+        if (!engine) return;
+
+        if (!isPlaying) {
+            await engine.startTransport();
+            togglePlay();
+        }
+
+        const trackId = `pro_${Math.random().toString(36).substr(2, 9)}`;
+
+        addTrack({
+            id: trackId,
+            name: `PRO ${loop.name.split(' - ')[2] || loop.name}`.toUpperCase(),
+            type: loop.category as any,
+            url: `/${loop.path}`,
+            color: '#8b5cf6',
+            isActive: true,
+            bpm: bpm
+        });
+
+        await engine.playTrack(trackId, `/${loop.path}`, loop.bpm);
+        setShowHelp(false);
     };
 
     if (!mounted) return null;
@@ -337,6 +382,14 @@ export default function Studio() {
                         </div>
                         <div style={{ marginBottom: '32px' }}>
                             <VoiceRecorder onUpload={(blob) => handleGenerate('lead', blob)} />
+                        </div>
+
+                        <div className="flex items-center gap-3" style={{ marginBottom: '16px' }}>
+                            <Disc size={16} color="#8b5cf6" />
+                            <h2 style={{ fontSize: '11px', fontWeight: 900, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Pro Library</h2>
+                        </div>
+                        <div style={{ marginBottom: '32px' }}>
+                            <LoopBrowser onAddLoop={handleAddProLoop} />
                         </div>
 
                         <div className="flex items-center gap-3" style={{ marginBottom: '16px' }}>

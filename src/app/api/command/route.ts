@@ -18,10 +18,14 @@ Available parameters:
 - compression (0 to 1)
 - resonance (0 to 1)
 - drive (0 to 1)
+- loopCategory (one of: 'kick', 'drum', 'bass', 'synth', 'fx', 'hat' - ONLY if user asks for pro/high-quality/pre-made loops)
 
 Return ONLY a JSON object with a "params" key containing these values. 
-Example: "Make it a dark techno lead with lots of reverb and lowpass" 
-Output: {"params": {"cutoff": 400, "reverb": 0.8, "resonance": 0.3}}
+Example: "I need a professional techno kick loop" 
+Output: {"params": {"loopCategory": "kick", "cutoff": 20000, "dist": 0.2}}
+
+Example: "Make it a dark techno lead with lots of reverb" 
+Output: {"params": {"cutoff": 400, "reverb": 0.8}}
 
 Current user command: "${command}"`;
 
