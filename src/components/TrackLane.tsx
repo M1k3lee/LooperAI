@@ -29,7 +29,7 @@ export default function TrackLane({ track, isPlaying, onRemove, onEffectChange, 
         reverb: 0,
         delay: 0,
         filter: 1,
-        volume: 0.8,
+        volume: 1.0,
         pitch: 0.5,
         dist: 0,
         pump: track.type === 'bass' || track.type === 'lead' ? 1 : 0

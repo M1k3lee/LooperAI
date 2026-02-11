@@ -24,7 +24,7 @@ class AudioEngine {
             // Increase lookahead to prevent cracking on slower systems
             Tone.getContext().lookAhead = 0.1;
 
-            this.masterBus = new Tone.Gain(0.8); // Headroom to prevent clipping
+            this.masterBus = new Tone.Gain(2.0); // Boosted master for web audio parity
             const limiter = new Tone.Limiter(-0.5).toDestination();
             this.analyzer = new Tone.Analyser("fft", 1024);
             this.masterBus.chain(limiter, this.analyzer);
@@ -302,8 +302,9 @@ class AudioEngine {
                 chain.volume.mute = !!value;
                 break;
             case 'volume':
-                // Smooth volume ramp
-                chain.volume.volume.rampTo(Tone.gainToDb(value), 0.05);
+                // Map 0-1 to -60dB to +6dB for better range/boost
+                const db = value === 0 ? -Infinity : Tone.gainToDb(value * 2);
+                chain.volume.volume.rampTo(db, 0.05);
                 break;
             case 'reverb':
                 chain.reverb.wet.rampTo(value, 0.05);
