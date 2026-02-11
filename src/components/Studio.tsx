@@ -58,13 +58,25 @@ export default function Studio() {
     const handleTogglePlay = async () => {
         const engine = audioEngine;
         if (!engine) return;
-        if (!isPlaying) await engine.startTransport();
-        else engine.stopTransport();
+        if (!isPlaying) {
+            await engine.startTransport();
+        } else {
+            engine.stopTransport();
+            // Optional: seek to 0 if you want stop-to-start behavior
+            // Tone.Transport.position = 0; 
+        }
         togglePlay();
     };
 
     const handleGenerate = async (suggestedType: string = 'synth', audioBlob?: Blob) => {
-        const currentPrompt = localPrompt || (audioBlob ? "Professional EDM melody from voice" : "");
+        let defaultPrompt = "";
+        if (!localPrompt && !audioBlob) {
+            if (suggestedType === 'drums') defaultPrompt = "High energy EDM drum loop";
+            if (suggestedType === 'bass') defaultPrompt = "Deep sub bass line";
+            if (suggestedType === 'lead') defaultPrompt = "Catchy synth lead melody";
+        }
+
+        const currentPrompt = localPrompt || defaultPrompt || (audioBlob ? "Professional EDM melody from voice" : "");
         if (!currentPrompt && !audioBlob) return;
 
         setGenerating(true);
@@ -112,7 +124,7 @@ export default function Studio() {
             }
 
             const trackId = Math.random().toString(36).substr(2, 9);
-            const humanName = (localPrompt || "VOICE FORGE").toUpperCase();
+            const humanName = (localPrompt || defaultPrompt || "VOICE FORGE").toUpperCase();
 
             if (response.data.audio) {
                 addTrack({

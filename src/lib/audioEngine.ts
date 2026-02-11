@@ -51,6 +51,9 @@ class AudioEngine {
     }
 
     async startTransport() {
+        if (Tone.context.state !== 'running') {
+            await Tone.context.resume();
+        }
         if (!this.isStarted) {
             await Tone.start();
             this.isStarted = true;
