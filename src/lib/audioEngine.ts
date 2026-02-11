@@ -100,25 +100,53 @@ class AudioEngine {
         if (this.players.has(id)) return;
 
         const chain = this.getOrCreateTrackChain(id);
+
+        // Create player
         const player = new Tone.Player({
             url: url,
             loop: true,
             autostart: false,
             onload: () => {
-                // Initial sync
-                const ratio = Tone.Transport.bpm.value / originalBpm;
+                // Determine length in bars (assuming 4/4)
+                // AI clips are often exactly 5, 10, or 30 seconds. 
+                // We'll try to guess if it's 2, 4, or 8 bars.
+                let detectedBpm = originalBpm;
+                const duration = player.buffer.duration;
+
+                // If it's an AI clip (usually very long), we might need to "fit" it
+                if (url.startsWith('data:audio') || url.includes('/generate')) {
+                    // Force fit: Assume the user hummed a 2 or 4 bar loop
+                    // Calculate what BPM would make this duration X bars
+                    const beats = duration * (Tone.Transport.bpm.value / 60);
+                    // Round to nearest power of 2 bars (8, 16 beats)
+                    const targetBeats = beats > 12 ? 16 : 8;
+                    detectedBpm = (targetBeats / duration) * 60;
+                }
+
+                const ratio = Tone.Transport.bpm.value / detectedBpm;
                 player.playbackRate = ratio;
                 player.sync().start(0);
-                console.log(`[PulseForge] Track Synced (${originalBpm} -> ${Tone.Transport.bpm.value.toFixed(1)}): ${id}`);
+
+                console.log(`[PulseForge] Synced: ${id} | Duration: ${duration.toFixed(2)}s | Target BPM: ${detectedBpm.toFixed(1)}`);
             }
         });
 
-        // Dynamic BPM sync
         const bpmListener = () => {
-            const ratio = Tone.Transport.bpm.value / originalBpm;
+            const duration = player.buffer.duration;
+            if (!duration) return;
+
+            let detectedBpm = originalBpm;
+            if (url.startsWith('data:audio') || url.includes('/generate')) {
+                const beats = duration * (Tone.Transport.bpm.value / 60);
+                const targetBeats = beats > 12 ? 16 : 8;
+                detectedBpm = (targetBeats / duration) * 60;
+            }
+
+            const ratio = Tone.Transport.bpm.value / detectedBpm;
             player.playbackRate = ratio;
         };
-        Tone.Transport.on('start', bpmListener); // Re-sync on start just in case
+
+        Tone.Transport.on('start', bpmListener);
 
         player.connect(chain.input);
         this.players.set(id, player);
@@ -303,7 +331,7 @@ class AudioEngine {
                 break;
             case 'volume':
                 // Map 0-1 to -60dB to +6dB for better range/boost
-                const db = value === 0 ? -Infinity : Tone.gainToDb(value * 2);
+                const db = value === 0 ? -Infinity : Tone.gainToDb(value * 4);
                 chain.volume.volume.rampTo(db, 0.05);
                 break;
             case 'reverb':

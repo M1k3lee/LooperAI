@@ -165,9 +165,16 @@ export default function Studio() {
         setShowHelp(false);
 
         let type = suggestedType;
-        const pl = localPrompt.toLowerCase();
+        const pl = currentPrompt.toLowerCase();
         if (pl.includes('drum') || pl.includes('kick') || pl.includes('snare') || pl.includes('hat') || pl.includes('clap') || pl.includes('perc')) type = 'drums';
-        if (pl.includes('bass')) type = 'bass';
+        if (pl.includes('bass') || pl.includes('sub')) type = 'bass';
+        if (pl.includes('lead') || pl.includes('synth') || pl.includes('melody')) type = 'lead';
+        if (pl.includes('fx') || pl.includes('riser') || pl.includes('impact')) type = 'fx';
+
+        const variation = Math.random().toString(36).substring(7);
+        const finalPrompt = audioBlob
+            ? `${currentPrompt} (Variation: ${variation})`
+            : currentPrompt;
 
         try {
             const engine = audioEngine;
@@ -193,18 +200,20 @@ export default function Studio() {
             let response;
             if (audioBlob) {
                 const formData = new FormData();
-                formData.append('prompt', currentPrompt);
+                formData.append('prompt', finalPrompt);
                 formData.append('type', type);
                 formData.append('audio', audioBlob);
                 response = await axios.post('/api/generate', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
             } else {
-                response = await axios.post('/api/generate', { prompt: currentPrompt, type: type });
+                response = await axios.post('/api/generate', { prompt: finalPrompt, type: type });
             }
 
             const trackId = Math.random().toString(36).substr(2, 9);
-            const humanName = audioBlob ? "VOICE FORGE" : extractTrackName(currentPrompt, type);
+            const humanName = audioBlob
+                ? (localPrompt ? `VOICE: ${extractTrackName(localPrompt, type)}` : "VOICE FORGE")
+                : extractTrackName(currentPrompt, type);
 
             if (response.data.useLocalFallback && engine) {
                 const stylePattern = getPatternByStyle(currentPrompt, type);
