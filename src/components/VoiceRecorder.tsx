@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from 'react';
-import { Mic, Square, Play, Check, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Mic, Square, Check, X } from 'lucide-react';
 
 export default function VoiceRecorder({ onUpload }: { onUpload: (blob: Blob) => void }) {
     const [isRecording, setIsRecording] = useState(false);
@@ -26,72 +25,77 @@ export default function VoiceRecorder({ onUpload }: { onUpload: (blob: Blob) => 
                 const url = URL.createObjectURL(blob);
                 setAudioBlob(blob);
                 setAudioUrl(url);
+                console.log("Recording stopped, blob created:", blob.size);
             };
 
             mediaRecorder.current.start();
             setIsRecording(true);
         } catch (err) {
             console.error("Microphone access denied:", err);
+            alert("Please allow microphone access to use Voice Forge.");
         }
     };
 
     const stopRecording = () => {
-        mediaRecorder.current?.stop();
-        setIsRecording(false);
+        if (mediaRecorder.current && isRecording) {
+            mediaRecorder.current.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const handleUpload = () => {
+        if (audioBlob) {
+            console.log("Uploading audio blob...");
+            onUpload(audioBlob);
+            setAudioUrl(null);
+            setAudioBlob(null);
+        }
     };
 
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
             {!audioUrl ? (
                 <button
                     onClick={isRecording ? stopRecording : startRecording}
-                    style={{
-                        width: '48px', height: '48px', borderRadius: '50%',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.2s ease',
-                        background: isRecording ? '#ef4444' : '#8b5cf6',
-                        border: 'none',
-                        cursor: 'pointer',
-                        boxShadow: isRecording ? '0 0 20px rgba(239, 68, 68, 0.4)' : '0 0 20px rgba(139, 92, 246, 0.2)'
-                    }}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isRecording
+                            ? 'bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                            : 'bg-purple-500 shadow-[0_0_20px_rgba(139,92,246,0.2)] hover:scale-105'
+                        }`}
                 >
-                    {isRecording ? <Square size={20} color="white" fill="white" /> : <Mic size={20} color="white" />}
+                    {isRecording ? <Square size={20} className="text-white fill-current" /> : <Mic size={20} className="text-white" />}
                 </button>
             ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button onClick={() => setAudioUrl(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)' }}>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setAudioUrl(null)} className="text-white/40 hover:text-white transition-colors">
                         <X size={16} />
                     </button>
-                    <div style={{ height: '32px', width: '100px', background: 'rgba(255,255,255,0.05)', borderRadius: '16px', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-                        <div style={{ height: '2px', width: '100%', background: 'rgba(139, 92, 246, 0.3)', borderRadius: '2px', position: 'relative', overflow: 'hidden' }}>
-                            <div className="animate-progress" style={{ position: 'absolute', inset: 0, background: '#8b5cf6' }} />
+
+                    {/* Visual Waveform placeholder */}
+                    <div className="h-8 w-24 bg-white/5 rounded-full flex items-center px-3 overflow-hidden relative">
+                        <div className="absolute inset-0 bg-purple-500/20 animate-pulse" />
+                        <div className="flex gap-0.5 w-full justify-center items-center h-full z-10">
+                            {[...Array(10)].map((_, i) => (
+                                <div key={i} className="w-1 bg-purple-400 rounded-full" style={{ height: `${Math.random() * 100}%` }} />
+                            ))}
                         </div>
                     </div>
+
                     <button
-                        onClick={() => {
-                            if (audioBlob) {
-                                onUpload(audioBlob);
-                                setAudioUrl(null);
-                                setAudioBlob(null);
-                            }
-                        }}
-                        style={{
-                            display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
-                            background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-                            border: 'none', borderRadius: '8px', color: 'white',
-                            fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
-                            boxShadow: '0 4px 15px rgba(139, 92, 246, 0.3)'
-                        }}
+                        onClick={handleUpload}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl text-[10px] font-black text-white shadow-lg shadow-purple-500/20 hover:scale-105 transition-transform"
                     >
                         USE HUM <Check size={12} />
                     </button>
                 </div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '9px', fontWeight: 900, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+
+            <div className="flex flex-col">
+                <span className="text-[9px] font-black text-white/40 uppercase tracking-widest leading-tight">
                     {isRecording ? 'Recording...' : audioUrl ? 'Review' : 'Voice/Bass'}
                 </span>
-                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)' }}>Hum a melody</span>
+                <span className="text-[9px] text-white/20 font-medium">
+                    {isRecording ? 'Sing a melody' : audioUrl ? 'Ready to forge' : 'Hum a melody'}
+                </span>
             </div>
         </div>
     );

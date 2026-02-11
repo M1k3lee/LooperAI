@@ -261,8 +261,8 @@ export default function Studio() {
                 </aside>
 
                 {/* Main Arrangement Area */}
-                <section className="flex-1 flex flex-col relative">
-                    <div className="tracks-container custom-scrollbar">
+                <section className="flex-1 flex flex-col relative h-full overflow-hidden">
+                    <div className="tracks-container custom-scrollbar flex-1 overflow-y-auto pb-32">
                         <div className="flex items-center justify-between mb-8">
                             <h2 className="text-3xl font-black tracking-tight">Timeline</h2>
                             <div className="flex items-center gap-4 text-xs font-bold text-white/20">
